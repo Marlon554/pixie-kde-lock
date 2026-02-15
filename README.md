@@ -2,7 +2,10 @@
 
 A clean, modern, and minimal SDDM theme inspired by Google Pixel UI and Material Design 3. 
 
-![Screenshot Placeholder](https://via.placeholder.com/800x450?text=Pixie+SDDM+Preview)
+<div align="center">
+  <img src="screenshots/lock_screen.png" width="45%" alt="Lock Screen" />
+  <img src="screenshots/login_screen.png" width="45%" alt="Login Screen" />
+</div>
 
 ## 🌟 Features
 
