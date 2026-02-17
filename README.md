@@ -7,6 +7,20 @@ A clean, modern, and minimal SDDM theme inspired by Google Pixel UI and Material
   <img src="screenshots/login_screen.png" width="45%" alt="Login Screen" />
 </div>
 
+<div align="center">
+  <img src="screenshots/lock_screen_2.png" width="22%" />
+  <img src="screenshots/login_screen_2.png" width="22%" />
+  <img src="screenshots/lock_screen_3.png" width="22%" />
+  <img src="screenshots/login_screen_3.png" width="22%" />
+</div>
+
+<div align="center">
+  <img src="screenshots/lock_screen_4.png" width="22%" />
+  <img src="screenshots/login_screen_4.png" width="22%" />
+  <img src="screenshots/lock_screen_5.png" width="22%" />
+  <img src="screenshots/login_screen_5.png" width="22%" />
+</div>
+
 ## 🌟 Features
 
 - **Pixel Aesthetic:** Clean typography and a unique two-tone stacked clock.
