@@ -115,6 +115,9 @@ After editing, apply the configuration by running:
 sudo nixos-rebuild switch
 ```
 
+> [!TIP]
+> **First-time build:** Nix will likely report a "hash mismatch" error because of the dummy `sha256` value. Simply copy the **actual hash** from the error message, update it in your config, and run the rebuild command again.
+
 ---
 
 ## 🛠 Configuration & Testing
