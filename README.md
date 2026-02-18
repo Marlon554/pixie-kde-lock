@@ -80,7 +80,7 @@ sudo ./install.sh
 ```
 
 ### 3. NixOS (Declarative)
-NixOS uses a declarative approach. Add this snippet to your `configuration.nix`:
+NixOS users should add the following snippet to their `/etc/nixos/configuration.nix`:
 
 ```nix
 { pkgs, ... }: {
@@ -108,6 +108,11 @@ NixOS uses a declarative approach. Add this snippet to your `configuration.nix`:
     pkgs.libsForQt5.qtsvg
   ];
 }
+```
+
+After editing, apply the configuration by running:
+```bash
+sudo nixos-rebuild switch
 ```
 
 ---
