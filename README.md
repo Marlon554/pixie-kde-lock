@@ -41,8 +41,14 @@ Before installing, ensure you have the required modules for your system version 
 Recommended for Fedora 40+, Arch Linux, CachyOS, NixOS.
 
 ```bash
-# Arch: sudo pacman -S qt6-declarative qt6-svg qt6-quickcontrols2
-# Fedora: sudo dnf install qt6-qtdeclarative qt6-qtsvg qt6-qtquickcontrols2
+# Arch:
+sudo pacman -S qt6-declarative qt6-svg qt6-quickcontrols2
+
+# Fedora:
+sudo dnf install qt6-qtdeclarative qt6-qtsvg qt6-qtquickcontrols2
+
+# Debian 13/Testing:
+sudo apt install libqt6quick6 libqt6qml6 libqt6svg6 libqt6quickcontrols2-6
 ```
 </details>
 
