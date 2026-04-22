@@ -1,4 +1,4 @@
-# Pixie KDE Lock
+# ✨ Pixie KDE Lock
 
 A clean, modern, and minimal kscreenlocker theme inspired by Google Pixel UI and Material Design 3.
 <div align="center">
@@ -11,7 +11,7 @@ A clean, modern, and minimal kscreenlocker theme inspired by Google Pixel UI and
 
 ---
 
-## Features
+## 🌟 Features
 
 - **Pixel Aesthetic:** Clean typography and a unique two-tone stacked clock.
 - ~~**Material You Dynamic Colors:** Intelligent color extraction that samples your wallpaper for UI accents.~~
@@ -20,7 +20,7 @@ A clean, modern, and minimal kscreenlocker theme inspired by Google Pixel UI and
 - **Material Design 3:** Dark card UI with smooth interactions and responsive dropdowns.
 - ~~**Keyboard Navigation:** Full support for navigating menus with arrows and `Enter`.~~
 
-## Installation
+## 📦 Installation
 
 **To install it:**
 ```bash
@@ -32,7 +32,7 @@ chmod +x install.sh
 > [!NOTE]
 > During installation, the script automatically creates a backup of the original lockscreen folder located in `/usr/share/plasma/shells/org.kde.plasma.desktop/contents/lockscreen`. This ensures you can restore it if needed.
 
-## Customization
+## 🎨 Customization
 Customization is handled by KDE Plasma. You can change the background by right-clicking on an image and setting it as your lock screen wallpaper (color extraction is currently unavailable).
 
 ## 🤝 Credits
