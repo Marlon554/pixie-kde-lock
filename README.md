@@ -30,7 +30,7 @@ chmod +x install.sh
 ./install.sh
 ```
 > [!NOTE]
-> During installation, the script automatically creates a backup of the original lockscreen folder located in `/usr/share/plasma/shells/org.kde.plasma.desktop/contents/lockscreen`. This ensures you can restore it if needed.
+> During installation, the script automatically creates a backup of the original lockscreen folder at `/usr/share/plasma/shells/org.kde.plasma.desktop/contents/lockscreen.bak`. This ensures you can restore it if needed.
 
 ## 🎨 Customization
 Customization is handled by KDE Plasma. You can change the background by right-clicking on an image and setting it as your lock screen wallpaper (color extraction is currently unavailable).
