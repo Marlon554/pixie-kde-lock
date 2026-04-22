@@ -1,12 +1,14 @@
 #!/bin/bash
 
-# Pixie SDDM - Universal Smart Installer
-# Author: xCaptaiN09
+# Pixie Lockscreen - Universal Smart Installer
+# Author: xCaptaiN09 (adapted for Lockscreen by Marlon554)
 
 set -e
 
 THEME_NAME="pixie"
-THEME_DIR="/usr/share/sddm/themes/${THEME_NAME}"
+LOCKSCREEN_DIR="/usr/share/plasma/shells/org.kde.plasma.desktop/contents/lockscreen"
+BACKUP_DIR="${LOCKSCREEN_DIR}.bak"
+PIXIe_SDDM_DIR="/usr/share/sddm/themes/${THEME_NAME}"
 
 # Colors
 GREEN='\033[0;32m'
@@ -15,68 +17,76 @@ YELLOW='\033[0;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}==>${NC} Starting Pixie SDDM Installation..."
+echo -e "${BLUE}==>${NC} Starting Pixie Lockscreen Installation..."
 
-# 1. SYSTEM DETECTION
-if command -v sddm-greeter-qt6 >/dev/null 2>&1; then
-    SYSTEM_QT="6"
-    GREETER_CMD="sddm-greeter-qt6"
-    TARGET_BRANCH="main"
-    echo -e "${BLUE}==>${NC} System detected: ${GREEN}Qt6 (Modern)${NC}"
-else
-    SYSTEM_QT="5"
-    GREETER_CMD="sddm-greeter"
-    TARGET_BRANCH="qt5"
-    echo -e "${BLUE}==>${NC} System detected: ${YELLOW}Qt5 (Legacy)${NC}"
-fi
-
-# 2. AUTO-VERSION SWITCH (Git Only)
-if [ -d .git ]; then
-    CURRENT_BRANCH=$(git branch --show-current)
-    if [ "$CURRENT_BRANCH" != "$TARGET_BRANCH" ]; then
-        echo -e "${YELLOW}==>${NC} System requires ${GREEN}${TARGET_BRANCH}${NC} version. Switching branch..."
-        git checkout "$TARGET_BRANCH"
-        # Re-run the script from the new branch to ensure we use the right files
-        exec ./install.sh
-    fi
-fi
-
-# 3. NIXOS CHECK
-if [ -f /etc/NIXOS ]; then
-    echo -e "${RED}Warning:${NC} NixOS detected. Please use the declarative method in your config."
-    exit 1
-fi
-
-# 4. ROOT CHECK
+# 1. ROOT CHECK
 if [ "$EUID" -ne 0 ]; then
     echo -e "${RED}Error:${NC} Please run as root (use sudo)."
     exit 1
 fi
 
-# 5. INSTALLATION
-if [ -d "${THEME_DIR}" ]; then
-    echo -e "${BLUE}==>${NC} Cleaning old version..."
-    rm -rf "${THEME_DIR}"
+# 2. KDE PLASMA CHECK
+if [ ! -d "/usr/share/plasma/shells/org.kde.plasma.desktop" ]; then
+    echo -e "${RED}Error:${NC} KDE Plasma not detected. Lockscreen only works on Plasma Desktop."
+    exit 1
 fi
 
-echo -e "${BLUE}==>${NC} Installing Pixie (Qt${SYSTEM_QT}) to ${THEME_DIR}..."
-mkdir -p "${THEME_DIR}"
-cp -r assets components Main.qml metadata.desktop theme.conf LICENSE "${THEME_DIR}/"
-chmod -R 755 "${THEME_DIR}"
+# 3. BACKUP EXISTING LOCKSCREEN
+if [ -d "${LOCKSCREEN_DIR}" ]; then
+    echo -e "${BLUE}==>${NC} Backing up existing lockscreen to ${BACKUP_DIR}..."
+    mv "${LOCKSCREEN_DIR}" "${BACKUP_DIR}"
+fi
 
-echo -e "${GREEN}Done!${NC} Pixie SDDM is now installed."
+# 4. CREATE NEW LOCKSCREEN DIRECTORY
+echo -e "${BLUE}==>${NC} Creating new lockscreen directory..."
+mkdir -p "${LOCKSCREEN_DIR}"
 
-# 6. CONFIGURATION
+# 5. COPY REQUIRED FILES FROM PIXIE SOURCE
+echo -e "${BLUE}==>${NC} Copying Pixie assets and components..."
+
+# Copy assets and components directories
+cp -r assets "${LOCKSCREEN_DIR}/"
+cp -r components "${LOCKSCREEN_DIR}/"
+
+# Copy specific QML and config files
+cp config.qml "${LOCKSCREEN_DIR}/"
+cp config.xml "${LOCKSCREEN_DIR}/"
+cp LockOsd.qml "${LOCKSCREEN_DIR}/"
+cp LockScreen.qml "${LOCKSCREEN_DIR}/"
+cp LockScreenUi.qml "${LOCKSCREEN_DIR}/"
+cp MainBlock.qml "${LOCKSCREEN_DIR}/"
+cp MediaControls.qml "${LOCKSCREEN_DIR}/"
+cp metadata.json "${LOCKSCREEN_DIR}/"
+cp NoPasswordUnlock.qml "${LOCKSCREEN_DIR}/"
+cp PasswordSync.qml "${LOCKSCREEN_DIR}/"
+cp qmldir "${LOCKSCREEN_DIR}/"
+
+# Set proper permissions
+chmod -R 755 "${LOCKSCREEN_DIR}"
+
+echo -e "${GREEN}Done!${NC} Pixie Lockscreen is now installed."
+
+# 6. WALLPAPER PROMPT (Pixie SDDM Integration)
 echo -e ""
-read -p "Apply Pixie as your active theme now? (y/N) " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    mkdir -p /etc/sddm.conf.d
-    echo -e "[Theme]\nCurrent=${THEME_NAME}" | tee /etc/sddm.conf.d/theme.conf > /dev/null
-    echo -e "${GREEN}Theme applied successfully!${NC}"
+if [ -d "${PIXIe_SDDM_DIR}" ]; then
+    echo -e "${YELLOW}Pixie SDDM detected!${NC}"
+    read -p "Apply Pixie SDDM wallpaper to lockscreen? (y/N) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}==>${NC} Copying wallpaper from Pixie SDDM..."
+        # Copy wallpaper/assets from SDDM theme (adjust paths as needed)
+        if [ -d "${PIXIe_SDDM_DIR}/assets/wallpapers" ]; then
+            cp -r "${PIXIe_SDDM_DIR}/assets/wallpapers" "${LOCKSCREEN_DIR}/assets/"
+        elif [ -f "${PIXIe_SDDM_DIR}/assets/wallpaper.jpg" ]; then
+            cp "${PIXIe_SDDM_DIR}/assets/wallpaper.jpg" "${LOCKSCREEN_DIR}/assets/"
+        fi
+        echo -e "${GREEN}Wallpaper applied successfully!${NC}"
+    fi
 else
-    echo -e "To apply manually, set ${GREEN}Current=${THEME_NAME}${NC} in your SDDM config."
+    echo -e "${YELLOW}Pixie SDDM not found.${NC} Skipping wallpaper integration."
 fi
 
 echo -e ""
-echo -e "Test with: ${BLUE}${GREETER_CMD} --test-mode --theme ${THEME_DIR}${NC}"
+echo -e "${GREEN}✅ Installation complete!${NC}"
+echo -e "${BLUE}ℹ️  ${NC}Log out and lock screen to test (Ctrl+Alt+L)"
+echo -e "${BLUE}ℹ️  ${NC}To revert: sudo mv ${BACKUP_DIR} ${LOCKSCREEN_DIR}"
