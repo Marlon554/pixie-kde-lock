@@ -25,7 +25,7 @@ import org.kde.breeze.components
 Item {
     id: mainBlock
 
-    // ── Public API expected by LockScreenUi ─────────────────────────────────────
+    // ── API required by LockScreenUi ─────────────────────────────────────
     // LockScreenUi accesses these properties directly
     readonly property alias mainPasswordBox: passwordBox
     property bool lockScreenUiVisible: false
@@ -37,13 +37,13 @@ Item {
     // userListModel: ListModel with { name, realName, icon }
     property var userListModel: null
 
-    // showUserList: ignored — we do not display the user list
+    // showUserList: ignored — we do not display a list of users
     property bool showUserList: false
 
     // actionItems: ignored — “Switch User” is on the custom card
     property list<Item> actionItems
 
-    // visibleBoundary: for the VirtualKeyboardLoader
+    // visibleBoundary: for VirtualKeyboardLoader
     property int visibleBoundary: height * 0.7
 
     // userList: VirtualKeyboardLoader accesses userList.y
@@ -175,7 +175,7 @@ Item {
                     }
                 }
 
-                // Circular avatar using Canvas (no border/outline)
+                // Circular avatar via Canvas (no border/outline)
                 Canvas {
                     id: avatarCanvas
                     anchors.fill: parent
@@ -220,10 +220,10 @@ Item {
                 font.family: mainBlock.pixieFont
             }
 
-            // ── Switch User pill — animations similar to Pixie's sessionPill ──
+            // ── Switch User pill — animations identical to Pixie's sessionPill ──
             // Reference: Main.qml #sessionPill
-            //   color:        pressed||opened → "#3D3F37"  idle → "#2D2F27"
-            //   border.color: pressed||opened → accent     idle → "#3D3F37"
+            //   color:        pressed||opened → “#3D3F37”  idle → “#2D2F27”
+            //   border.color: pressed||opened → accent     idle → “#3D3F37”
             //   scale:        pressed → 0.95
             //   Behavior on scale: NumberAnimation { duration: 100 }
             Item {
@@ -346,7 +346,7 @@ Item {
                     font.family: mainBlock.pixieFont
                     focus: true
                     enabled: !authenticator.graceLocked
-                    // CursorVisible via activeFocus is automatic in TextInput
+                    // cursorVisible via activeFocus is automatic in TextInput
                     selectionColor: Qt.rgba(mainBlock.accent.r,
                                             mainBlock.accent.g,
                                             mainBlock.accent.b, 0.4)
