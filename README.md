@@ -2,8 +2,8 @@
 
 A clean, modern, and minimal kscreenlocker theme inspired by Google Pixel UI and Material Design 3.
 <div align="center">
-  <img src="screenshots/Lock_Screen.png" width="45%" alt="Lock Screen" />
-  <img src="screenshots/Login_Card.png" width="45%" alt="Login Screen" />
+  <img src="screenshots/Lock Screen.png" width="45%" alt="Lock Screen" />
+  <img src="screenshots/Login Card.png" width="45%" alt="Login Screen" />
 </div>
 
 > [!CAUTION]
