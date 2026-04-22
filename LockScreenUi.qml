@@ -24,17 +24,12 @@ import "components"
 Item {
     id: lockScreenUi
 
-    // Accent extracted from the wallpaper
     property color extractedAccent: "#A9C78F"
 
-    // Exposed so that MainBlock can access sessionManagement and fonts
     property alias sessionManagement: sessionManagement
     property alias pixieFontMedium:   pixieFontMedium
     property alias pixieFontRegular:  pixieFontRegular
     property alias pixieFontBold:     pixieFontBold
-
-    // Save the result of `grabToImage` to prevent it from being collected by the GC
-    property var _grabbedImage: null
 
     FontLoader { id: pixieFontRegular; source: "assets/fonts/FlexRounded-R.ttf" }
     FontLoader { id: pixieFontMedium;  source: "assets/fonts/FlexRounded-M.ttf" }
@@ -105,6 +100,158 @@ Item {
         }
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    // COLOR EXTRACTION — reads kscreenlockerrc via XMLHttpRequest to obtain the
+    // actual path of the wallpaper image and loads it using standard QML Image.
+    // This avoids all issues with opaque Item / ShaderEffectSource / Qt6.
+    // ══════════════════════════════════════════════════════════════════════
+
+    // Wallpaper image loaded directly from the file system
+    Image {
+        id: wallpaperImg
+        width: 64; height: 64
+        visible: false
+        cache: false
+        fillMode: Image.Stretch
+        smooth: false   // without anti-aliasing — we want the raw pixels
+
+        onStatusChanged: {
+            if (status === Image.Ready)
+                accentCanvas.requestPaint();
+        }
+    }
+
+    // A canvas that processes pixels and extracts the highlight
+    Canvas {
+        id: accentCanvas
+        width: 64; height: 64
+        x: -200; y: -200
+        visible: false
+        property bool processed: false
+
+        onPaint: {
+            if (processed || wallpaperImg.status !== Image.Ready) return;
+            var ctx = getContext("2d");
+            ctx.clearRect(0, 0, width, height);
+            ctx.drawImage(wallpaperImg, 0, 0, width, height);
+
+            var d = ctx.getImageData(0, 0, width, height).data;
+            if (!d || d.length < 4) return;
+
+            // Check to make sure the pixels are not zero.
+            var hasPixels = false;
+            for (var k = 0; k < Math.min(d.length, 128); k += 4) {
+                if (d[k] > 5 || d[k+1] > 5 || d[k+2] > 5) { hasPixels = true; break; }
+            }
+            if (!hasPixels) return;
+
+            var histogram    = new Array(36).fill(0);
+            var sampleColors = new Array(36).fill(null);
+            var vibrantFound = false;
+
+            for (var i = 0; i < d.length; i += 4) {
+                var r = d[i]   / 255;
+                var g = d[i+1] / 255;
+                var b = d[i+2] / 255;
+                var c = Qt.rgba(r, g, b, 1.0);
+                if (c.hsvSaturation > 0.20 && c.hsvValue > 0.15) {
+                    var h = c.hsvHue * 360;
+                    if (h < 0) continue;
+                    var bIdx = Math.floor(h / 10) % 36;
+                    var w    = c.hsvSaturation * c.hsvValue;
+                    histogram[bIdx] += w;
+                    if (!sampleColors[bIdx] ||
+                            w > sampleColors[bIdx].hsvSaturation * sampleColors[bIdx].hsvValue)
+                        sampleColors[bIdx] = c;
+                    vibrantFound = true;
+                }
+            }
+            if (!vibrantFound) return;
+
+            histogram[0] += histogram[35];
+            var maxCount = -1, winnerIdx = -1;
+            for (var j = 0; j < 35; j++) {
+                if (histogram[j] > maxCount) { maxCount = histogram[j]; winnerIdx = j; }
+            }
+            if (winnerIdx !== -1 && sampleColors[winnerIdx]) {
+                var fc = sampleColors[winnerIdx];
+                var s  = Math.max(0.35, Math.min(0.65, fc.hsvSaturation * 0.85));
+                lockScreenUi.extractedAccent = Qt.hsva(fc.hsvHue, s, 0.95, 1.0);
+                processed = true;
+            }
+        }
+    }
+
+    // Reads kscreenlockerrc and extracts the path to the wallpaper
+    function readWallpaperPath() {
+        // Get HOME via /proc/self/environ
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", "file:///proc/self/environ", false);
+        xhr.send();
+        var home = "";
+        if (xhr.status === 0 && xhr.responseText) {
+            var vars = xhr.responseText.split("\0");
+            for (var i = 0; i < vars.length; i++) {
+                if (vars[i].startsWith("HOME=")) {
+                    home = vars[i].substring(5);
+                    break;
+                }
+            }
+        }
+
+        if (!home) return;
+
+        var cfgXhr = new XMLHttpRequest();
+        cfgXhr.open("GET", "file://" + home + "/.config/kscreenlockerrc", false);
+        cfgXhr.send();
+
+        if (cfgXhr.status !== 0 && cfgXhr.status !== 200) return;
+
+        var text  = cfgXhr.responseText;
+        var lines = text.split("\n");
+
+        // Look for “Image=” or “PreviewImage=” in the wallpaper section
+        var imagePath    = "";
+        var previewPath  = "";
+        var inSection    = false;
+
+        for (var l = 0; l < lines.length; l++) {
+            var line = lines[l].trim();
+            // Detect section [Greeter][Wallpaper][org.kde.image][General]
+            if (line.startsWith("[")) {
+                inSection = line.indexOf("Wallpaper") !== -1 && line.indexOf("General") !== -1;
+            }
+            if (inSection) {
+                if (line.startsWith("PreviewImage=") && !previewPath) {
+                    previewPath = line.substring("PreviewImage=".length).trim();
+                }
+                if (line.startsWith("Image=") && !imagePath) {
+                    imagePath = line.substring("Image=".length).trim();
+                    // Remove file:// prefix if present
+                    if (imagePath.startsWith("file://"))
+                        imagePath = imagePath.substring(7);
+                }
+            }
+        }
+
+        // Prefer PreviewImage (small thumbnail = faster to process)
+        var finalPath = previewPath || imagePath;
+        if (!finalPath) return;
+
+        // Ensure that it is a file:// URL
+        if (!finalPath.startsWith("file://"))
+            finalPath = "file://" + finalPath;
+
+        wallpaperImg.source = finalPath;
+    }
+
+    // There is no StandardPaths in plain QML — use an alternative method
+    // Reads the data as soon as the component is ready
+    Component.onCompleted: {
+        // A short delay while the system boots up completely
+        Qt.callLater(readWallpaperPath);
+    }
+
     // ── Root MouseArea ─────────────────────────────────────────────────────
     MouseArea {
         id: lockScreenRoot
@@ -153,11 +300,9 @@ Item {
             }
         }
         Timer { id: notificationRemoveTimer; interval: 3000
-            onTriggered: root.notification = ""
-        }
+            onTriggered: root.notification = "" }
         Timer { id: graceLockTimer; interval: 3000
-            onTriggered: { root.clearPassword(); authenticator.startAuthenticating(); }
-        }
+            onTriggered: { root.clearPassword(); authenticator.startAuthenticating(); } }
 
         PropertyAnimation {
             id: launchAnimation; target: lockScreenRoot; property: "opacity"
@@ -165,13 +310,13 @@ Item {
         }
         Component.onCompleted: launchAnimation.start()
 
-        // ── Wallpaper (WallpaperFader controls blur) ───────────────────────
+        // ── Wallpaper + blur via WallpaperFader ────────────────────────────
         WallpaperFader {
             anchors.fill: parent
             state: lockScreenRoot.uiVisible ? "on" : "off"
             source: wallpaper
             mainStack: mainStack
-            footer: footer
+            footer: pixieFooter
             clock: dummyClockRef
             alwaysShowClock: false
         }
@@ -185,253 +330,69 @@ Item {
             z: 0
         }
 
-        // ── Extracting color from the wallpaper ───────────────────────────────────
-        //
-        // Problem: `wallpaper` is an opaque Item injected by the C++ kscreenlocker.
-        // ctx.drawImage(wallpaper) on a Canvas fails silently in Qt6.
-        // grabToImage() directly on the wallpaper may fail if the item has not
-        // been composited for at least one frame in the scene graph.
-        //
-        // Two-step solution:
-        //   1. ShaderEffectSource points to wallpaper → forces GPU composition
-        //   2. grabToImage() on ShaderEffectSource → real image:// URL
-        //   3. QML Image loads this URL → pixels accessible via Canvas
-
-        // Step 1: capture the wallpaper as a texture
-        ShaderEffectSource {
-            id: wallpaperCapture
-            sourceItem: wallpaper
-            width:  64; height: 64
-            x: -300; y: -300
-            visible: false
-            hideSource: false   // doesn't hide the original wallpaper
-            live: false         // freezes the frame — does not refresh continuamente
-        }
-
-        // Step 2: Image that will receive the URL from the grab
-        Image {
-            id: grabbedWallpaper
-            width: 64; height: 64
-            x: -300; y: -300
-            visible: false
-            cache: false
-            fillMode: Image.Stretch
-
-            onStatusChanged: {
-                if (status === Image.Ready) {
-                    accentCanvas.requestPaint();
-                }
-            }
-        }
-
-        // Step 3: Canvas analyzes the pixels in the captured image
-        Canvas {
-            id: accentCanvas
-            width: 64; height: 64
-            x: -300; y: -300
-            visible: false
-
-            property bool processed: false
-
-            onPaint: {
-                if (processed) return;
-                if (grabbedWallpaper.status !== Image.Ready) return;
-
-                var ctx = getContext("2d");
-                ctx.clearRect(0, 0, width, height);
-                ctx.drawImage(grabbedWallpaper, 0, 0, width, height);
-
-                var d = ctx.getImageData(0, 0, width, height).data;
-                if (!d || d.length < 4) {
-                    grabRetryTimer.restart();
-                    return;
-                }
-
-                // Check that they are not all zeros (empty capture)
-                var hasPixels = false;
-                for (var k = 0; k < Math.min(d.length, 64); k++) {
-                    if (d[k] > 0) { hasPixels = true; break; }
-                }
-                if (!hasPixels) {
-                    grabRetryTimer.restart();
-                    return;
-                }
-
-                var histogram    = new Array(36).fill(0);
-                var sampleColors = new Array(36).fill(null);
-                var vibrantFound = false;
-
-                for (var i = 0; i < d.length; i += 4) {
-                    var r = d[i]   / 255;
-                    var g = d[i+1] / 255;
-                    var b = d[i+2] / 255;
-                    var c = Qt.rgba(r, g, b, 1.0);
-
-                    if (c.hsvSaturation > 0.20 && c.hsvValue > 0.15) {
-                        var h = c.hsvHue * 360;
-                        if (h < 0) continue;
-                        var bIdx = Math.floor(h / 10) % 36;
-                        var w    = c.hsvSaturation * c.hsvValue;
-                        histogram[bIdx] += w;
-                        if (!sampleColors[bIdx] ||
-                                w > sampleColors[bIdx].hsvSaturation * sampleColors[bIdx].hsvValue)
-                            sampleColors[bIdx] = c;
-                        vibrantFound = true;
-                    }
-                }
-
-                if (!vibrantFound) {
-                    grabRetryTimer.restart();
-                    return;
-                }
-
-                histogram[0] += histogram[35];
-                var maxCount = -1, winnerIdx = -1;
-                for (var j = 0; j < 35; j++) {
-                    if (histogram[j] > maxCount) {
-                        maxCount = histogram[j];
-                        winnerIdx = j;
-                    }
-                }
-
-                if (winnerIdx !== -1 && sampleColors[winnerIdx]) {
-                    var fc = sampleColors[winnerIdx];
-                    var s  = Math.max(0.35, Math.min(0.65, fc.hsvSaturation * 0.85));
-                    lockScreenUi.extractedAccent = Qt.hsva(fc.hsvHue, s, 0.95, 1.0);
-                    processed = true;
-                }
-            }
-        }
-
-        // Main timer: waits for the wallpaper to load, then takes the screenshot
-        Timer {
-            id: grabTimer
-            interval: 1500
-            repeat: false
-            running: true
-            onTriggered: doGrab()
-        }
-
-        // Retry timer in case the capture fails
-        Timer {
-            id: grabRetryTimer
-            interval: 1000
-            repeat: false
-            onTriggered: doGrab()
-        }
-
-        function doGrab() {
-            if (accentCanvas.processed) return;
-            // Forces the ShaderEffectSource to update with the current frame
-            wallpaperCapture.scheduleUpdate();
-            // A short delay to allow the scheduleUpdate to propagate before the grab
-            Qt.callLater(function() {
-                wallpaperCapture.grabToImage(function(result) {
-                    lockScreenUi._grabbedImage = result;
-                    if (result && result.url && result.url !== "") {
-                        grabbedWallpaper.source = result.url;
-                        // if already loaded (cached), trigger onPaint directly
-                        if (grabbedWallpaper.status === Image.Ready)
-                            accentCanvas.requestPaint();
-                    } else {
-                        grabRetryTimer.restart();
-                    }
-                }, Qt.size(64, 64));
-            });
-        }
-
-        // ════════════════════════════════ ══════════════════════════════════
-        // FIXED ELEMENTS — date (top left) + suspend (top right)
-        // Visible immediately, without depending on accentCanvas.processed,
-        // since the accent will not yet be available in the first frame.
-        // They use z:10 to appear above the overlay and the WallpaperFader.
+        // ══════════════════════════════════════════════════════════════════
+        // FIXED ELEMENTS (z:10) — always visible, independent of accent
         // ════════════════════════════════ ══════════════════════════════════
 
-        // ── Date ──────────────────────────────────────────────────────────
+        // ── Date — upper left corner ────────────────────────────────
         Text {
             id: dateLabel
             z: 10
-            anchors {
-                top: parent.top; left: parent.left
-                topMargin: 44; leftMargin: 56
-            }
+            anchors { top: parent.top; left: parent.left; topMargin: 44; leftMargin: 56 }
             text: Qt.formatDateTime(new Date(), "dddd, MMMM d")
-            color: accentCanvas.processed
-                   ? lockScreenUi.extractedAccent
-                   : "#aed68a"
+            color: accentCanvas.processed ? lockScreenUi.extractedAccent : "#AED68A"
             font.pixelSize: 20
             font.family: pixieFontMedium.name
-            // Always visible — no opacity condition
             opacity: 0.9
             Behavior on color { ColorAnimation { duration: 800 } }
-
             Timer {
                 interval: 60000; running: true; repeat: true
                 onTriggered: dateLabel.text = Qt.formatDateTime(new Date(), "dddd, MMMM d")
             }
         }
 
-        // ── Suspend Button ────────────────────────────────────────────────
-        // Always visible (z:10). In --testing, suspendToRamSupported = false,
-        // so we show it anyway — clicking does nothing in testing.
+        // ── Pause button — top right corner ──────────────────────
         Item {
             id: suspendButton
             z: 10
-            anchors {
-                top: parent.top; right: parent.right
-                topMargin: 28; rightMargin: 44
-            }
+            anchors { top: parent.top; right: parent.right; topMargin: 30; rightMargin: 44 }
             width: 40; height: 40
 
             Text {
-                id: suspendIcon
                 anchors.centerIn: parent
                 text: "󰤄"
                 font.pixelSize: 24
                 font.family: pixieFontMedium.name
-                color: accentCanvas.processed
-                       ? lockScreenUi.extractedAccent
-                       : "#aed68a"
-                opacity: suspendArea.containsMouse ? 1.0 : 0.75
-                Behavior on color   { ColorAnimation  { duration: 800 } }
-                Behavior on opacity { NumberAnimation  { duration: 150 } }
-
-                scale: suspendArea.containsPress ? 0.88 : 1.0
-                Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutQuad } }
+                color: accentCanvas.processed ? lockScreenUi.extractedAccent : "#AED68A"
+                opacity: suspendArea.containsMouse ? 1.0 : 0.8
+                scale:   suspendArea.containsPress  ? 0.88 : 1.0
+                Behavior on color   { ColorAnimation { duration: 800 } }
+                Behavior on opacity { NumberAnimation { duration: 150 } }
+                Behavior on scale   { NumberAnimation { duration: 100; easing.type: Easing.OutQuad } }
             }
-
             MouseArea {
                 id: suspendArea
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    if (root.suspendToRamSupported)
-                        root.suspendToRam();
-                    else
-                        sessionManagement.suspend();
-                }
+                onClicked: root.suspendToRamSupported ? root.suspendToRam()
+                                                      : sessionManagement.suspend()
             }
         }
 
-        // ════════════════════════════════ ══════════════════════════════════
+        // ══════════════════════════════════════════════════════════════════
         // CLOCK — centered, hidden when uiVisible = true
-        // ════════════════════════════════ ══════════════════════════════════
+        // ══════════════════════════════════════════════════════════════════
         Item {
             id: pixieClockContainer
             z: 5
             anchors.centerIn: parent
             width:  pixieClock.implicitWidth
             height: pixieClock.implicitHeight
-
             opacity: lockScreenRoot.uiVisible ? 0 : 1
             Behavior on opacity {
-                NumberAnimation {
-                    duration: Kirigami.Units.veryLongDuration
-                    easing.type: Easing.InOutQuad
-                }
+                NumberAnimation { duration: Kirigami.Units.veryLongDuration; easing.type: Easing.InOutQuad }
             }
-
             PixieClock {
                 id: pixieClock
                 baseAccent: lockScreenUi.extractedAccent
@@ -499,62 +460,103 @@ Item {
             }
         }
 
-        // ── Footer ────────────────────────────────────────────────────────
-        RowLayout {
-            id: footer
+        // ══════════════════════════════════════════════════════════════════
+        // FOOTER — Pixie style with real Plasma data
+        // Left: on-screen keyboard (if available) + keyboard layout
+        // Right: battery (percentage + Nerd Font icon)
+        // ══════════════════════════════════════════════════════════════════
+        Item {
+            id: pixieFooter
             z: 10
             anchors {
                 bottom: parent.bottom; left: parent.left; right: parent.right
-                margins: Kirigami.Units.smallSpacing
+                bottomMargin: 18; leftMargin: 24; rightMargin: 24
             }
-            spacing: Kirigami.Units.smallSpacing
+            height: 30
 
-            PlasmaComponents3.ToolButton {
-                id: virtualKeyboardButton
-                focusPolicy: Qt.TabFocus
-                text: i18ndc("plasma_shell_org.kde.plasma.desktop",
-                             "Button to show/hide virtual keyboard", "Virtual Keyboard")
-                icon.name: inputPanel.keyboardActive
-                           ? "input-keyboard-virtual-on" : "input-keyboard-virtual-off"
-                onClicked: {
-                    mainBlock.mainPasswordBox.forceActiveFocus();
-                    inputPanel.showHide();
-                }
-                visible: inputPanel.status === Loader.Ready
-                Layout.fillHeight: true
-                containmentMask: Item {
-                    parent: virtualKeyboardButton
-                    anchors.fill: parent
-                    anchors.leftMargin:   -footer.anchors.margins
-                    anchors.bottomMargin: -footer.anchors.margins
-                }
-            }
+            // ── Left: on-screen keyboard + layout ────────────────────────
+            Row {
+                anchors { left: parent.left; verticalCenter: parent.verticalCenter }
+                spacing: 18
 
-            PlasmaComponents3.ToolButton {
-                id: keyboardButton
-                focusPolicy: Qt.TabFocus
-                Accessible.description: i18ndc("plasma_shell_org.kde.plasma.desktop",
-                                               "Button to change keyboard layout", "Switch layout")
-                icon.name: "input-keyboard"
+                // Virtual keyboard button — Nerd Font icon, functional
+                Item {
+                    width: 30; height: 30
+                    visible: inputPanel.status === Loader.Ready
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: inputPanel.keyboardActive ? "󰌐" : "󰌌"
+                        font.pixelSize: 20
+                        font.family: pixieFontMedium.name
+                        color: inputPanel.keyboardActive
+                               ? (accentCanvas.processed ? lockScreenUi.extractedAccent : "white")
+                               : Qt.rgba(1, 1, 1, 0.6)
+                        Behavior on color { ColorAnimation { duration: 200 } }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            mainBlock.mainPasswordBox.forceActiveFocus();
+                            inputPanel.showHide();
+                        }
+                    }
+
+                    // Keep containmentMask in line with Fitts's law
+                    containmentMask: Item {
+                        parent: pixieFooter
+                        anchors {
+                            left: pixieFooter.left; bottom: pixieFooter.bottom
+                            top: pixieFooter.top
+                        }
+                        width: 48
+                    }
+                }
+
+                // Keyboard layout — clickable short text
                 PW.KeyboardLayoutSwitcher {
                     id: keyboardLayoutSwitcher
-                    anchors.fill: parent
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: keyboardLayoutText.implicitWidth + 8
+                    height: 30
                     acceptedButtons: Qt.NoButton
-                }
-                text: keyboardLayoutSwitcher.layoutNames.longName
-                onClicked: keyboardLayoutSwitcher.keyboardLayout.switchToNextLayout()
-                visible: keyboardLayoutSwitcher.hasMultipleKeyboardLayouts
-                Layout.fillHeight: true
-                containmentMask: Item {
-                    parent: keyboardButton
-                    anchors.fill: parent
-                    anchors.leftMargin:   virtualKeyboardButton.visible ? 0 : -footer.anchors.margins
-                    anchors.bottomMargin: -footer.anchors.margins
+                    visible: hasMultipleKeyboardLayouts
+
+                    Text {
+                        id: keyboardLayoutText
+                        anchors.centerIn: parent
+                        text: keyboardLayoutSwitcher.layoutNames.shortName ||
+                              keyboardLayoutSwitcher.layoutNames.longName  || "?"
+                        font.pixelSize: 13
+                        font.family: pixieFontMedium.name
+                        font.capitalization: Font.AllUppercase
+                        color: Qt.rgba(1, 1, 1, 0.75)
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: keyboardLayoutSwitcher.keyboardLayout.switchToNextLayout()
+                    }
                 }
             }
 
-            Item { Layout.fillWidth: true }
-            Battery {}
+            // ── Right: battery via breeze's Battery{} ─────────────────
+            // Battery is an opaque breeze component that internally uses
+            // DataEngineConsumer — it does not expose percent or charging as properties.
+            // We keep it as is (functional) and apply Pixie opacity.
+            Item {
+                anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                width: batteryComponent.implicitWidth
+                height: batteryComponent.implicitHeight
+                opacity: 0.85
+
+                Battery {
+                    id: batteryComponent
+                    anchors.centerIn: parent
+                }
+            }
         }
     }
 }
