@@ -1,7 +1,7 @@
 {
     "KPlugin": {
         "Id":          "pixie-kde-lock",
-        "Name":        "Pixie Lockscreen",
+        "Name":        "Pixie KDE Lock",
         "Description": "Pixie SDDM visual style adapted for Plasma kscreenlocker",
         "Version":     "1.0",
         "Website":     "https://github.com/Marlon554/pixie-kde-lock",
