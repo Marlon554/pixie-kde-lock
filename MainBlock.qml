@@ -1,22 +1,20 @@
 /*
- * Pixie Lockscreen - MainBlock
- * Visual design: Pixie SDDM (xCaptaiN09)
- * Base API:      Plasma kscreenlocker
+ * Pixie Lockscreen — MainBlock
+ * Visual design: Pixie SDDM by xCaptaiN09
+ * Base: Plasma kscreenlocker
+ *
+ * Does NOT inherit SessionManagementScreen to avoid duplicate rendering of
+ * avatar / username / actionItems that the parent component auto-generates.
+ * Implements the minimum API expected by LockScreenUi and VirtualKeyboardLoader.
  *
  * SPDX-License-Identifier: MIT OR GPL-2.0-or-later
- *
- * Does NOT inherit from SessionManagementScreen to prevent duplicate
- * rendering of
- * avatar/name/actionItems. Implements the minimum API required by
- * LockScreenUi.
  */
 
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Controls as QQC2
 
 import org.kde.plasma.components as PlasmaComponents3
-import org.kde.plasma.extras as PlasmaExtras
 import org.kde.kirigami as Kirigami
 import org.kde.kscreenlocker as ScreenLocker
 
@@ -25,110 +23,97 @@ import org.kde.breeze.components
 Item {
     id: mainBlock
 
-    // ── API required by LockScreenUi ─────────────────────────────────────
-    // LockScreenUi accesses these properties directly
-    readonly property alias mainPasswordBox: passwordBox
+    // ── API required by LockScreenUi / VirtualKeyboardLoader ──────────────
+    // mainPasswordBox must be a TextField (QQuickTextField), not TextInput,
+    // because VirtualKeyboardLoader casts it to TextField internally.
+    readonly property alias mainPasswordBox: passwordField
+
     property bool lockScreenUiVisible: false
-    property bool showPassword: false
-
-    // Notificationmessage: Caps Lock, errors, etc.
     property string notificationMessage: ""
+    property var    userListModel: null
+    property bool   showUserList:  false
+    property list<Item> actionItems   // unused — Switch User lives in the card
 
-    // userListModel: ListModel with { name, realName, icon }
-    property var userListModel: null
-
-    // showUserList: ignored — we do not display a list of users
-    property bool showUserList: false
-
-    // actionItems: ignored — “Switch User” is on the custom card
-    property list<Item> actionItems
-
-    // visibleBoundary: for VirtualKeyboardLoader
+    // visibleBoundary: used by VirtualKeyboardLoader to keep the field visible
     property int visibleBoundary: height * 0.7
 
-    // userList: VirtualKeyboardLoader accesses userList.y
-    // We provide an empty Item in a safe position
-    readonly property Item userList: dummyUserList
-    Item { id: dummyUserList; y: mainBlock.height * 0.3; height: 0 }
+    // userList.y: also used by VirtualKeyboardLoader
+    readonly property Item userList: _dummyUserList
+    Item { id: _dummyUserList; y: mainBlock.height * 0.3; height: 0 }
 
     signal passwordResult(string password)
 
-    // playHighlightAnimation: called by onNotificationRepeated
-    function playHighlightAnimation() {
-        highlightAnim.start();
-    }
+    function playHighlightAnimation() { _highlightAnim.start(); }
+    function startLogin()             { passwordResult(passwordField.text); }
 
-    function startLogin() {
-        passwordResult(passwordBox.text);
-    }
+    // Resolved from parent chain — set in LockScreenUi
+    property color  accent:    _resolveProperty("accent",         "#A9C78F")
+    property string pixieFont: _resolveProperty("pixieFontMedium.name", "")
 
-    // ── Accent colour forwarded from LockScreenUi ─────────────────────────
-    // SessionManagementScreen sits inside LockScreenUi so we can walk up.
-    property color accent: {
+    function _resolveProperty(propPath, fallback) {
+        var keys = propPath.split(".");
         var p = parent;
         while (p) {
-            if (typeof p.extractedAccent !== "undefined") return p.extractedAccent;
+            var val = p;
+            var ok = true;
+            for (var i = 0; i < keys.length; i++) {
+                if (typeof val[keys[i]] !== "undefined") {
+                    val = val[keys[i]];
+                } else { ok = false; break; }
+            }
+            if (ok && val !== p) return val;
             p = p.parent;
         }
-        return "#A9C78F";
-    }
-
-    // Font: FlexRounded Medium from LockScreenUi
-    property string pixieFont: {
-        var p = parent;
-        while (p) {
-            if (typeof p.pixieFontMedium !== "undefined") return p.pixieFontMedium.name;
-            p = p.parent;
-        }
-        return "";
+        return fallback;
     }
 
     property string userName: (userListModel && userListModel.count > 0)
                               ? (userListModel.get(0).realName || userListModel.get(0).name)
                               : ""
     property string userIcon: (userListModel && userListModel.count > 0)
-                              ? userListModel.get(0).icon
-                              : ""
+                              ? userListModel.get(0).icon : ""
 
-    // ── Highlight animation (called when the notification repeats) ───────
+    // ── Highlight flash (notification repeated) ────────────────────────────
     SequentialAnimation {
-        id: highlightAnim
-        PropertyAnimation { target: cardVisual; property: "opacity"; to: 0.6; duration: 80 }
-        PropertyAnimation { target: cardVisual; property: "opacity"; to: 0.92; duration: 80 }
+        id: _highlightAnim
+        PropertyAnimation { target: cardVisual; property: "opacity"; to: 0.4; duration: 80 }
+        PropertyAnimation { target: cardVisual; property: "opacity"; to: 0.7; duration: 80 }
     }
 
-    // ── Card centered on the screen ─────────────────────────────────────────
+    // ── Login card ─────────────────────────────────────────────────────────
+    // Dimensions and colors match Pixie Main.qml loginCard exactly:
+    //   width:380  height:480  opacity:0.7  radius:32  color:"#1A1C18"
     Rectangle {
         id: cardVisual
 
-        width:  360
-        height: cardInner.implicitHeight + 48
+        width:  380
+        height: 480
         anchors.centerIn: parent
 
-        property bool isError: false
+        color:   cardVisual.isError ? "#442222" : "#1A1C18"
+        opacity: 0.7
+        radius:  32
 
-        color:   isError ? "#3a1a1a" : "#1e201b"
-        opacity: 0.92
-        radius:  28
+        property bool isError: false
 
         Behavior on color   { ColorAnimation  { duration: 200 } }
         Behavior on opacity { NumberAnimation { duration: 100 } }
 
-        // Shake when entering the wrong password
+        // Shake on wrong password — mirrors Pixie shakeAnimation
         SequentialAnimation {
             id: shakeAnimation
             loops: 2
             PropertyAnimation {
                 target: cardVisual; property: "anchors.horizontalCenterOffset"
-                from: 0;   to: -12; duration: 50; easing.type: Easing.InOutQuad
+                from: 0;   to: -10; duration: 50; easing.type: Easing.InOutQuad
             }
             PropertyAnimation {
                 target: cardVisual; property: "anchors.horizontalCenterOffset"
-                from: -12; to:  12; duration: 50; easing.type: Easing.InOutQuad
+                from: -10; to:  10; duration: 50; easing.type: Easing.InOutQuad
             }
             PropertyAnimation {
                 target: cardVisual; property: "anchors.horizontalCenterOffset"
-                from:  12; to:   0; duration: 50; easing.type: Easing.InOutQuad
+                from:  10; to:   0; duration: 50; easing.type: Easing.InOutQuad
             }
             onStopped: cardVisual.isError = false
         }
@@ -142,26 +127,23 @@ Item {
             }
         }
 
-        // ── Card content ───────────────────────────────────────────────
+        // Card content — anchors.margins:40, spacing:15 (Pixie values)
         ColumnLayout {
             id: cardInner
-            anchors {
-                top: parent.top; left: parent.left; right: parent.right
-                margins: 36
-                topMargin: 32
-            }
-            spacing: 14
+            anchors { fill: parent; margins: 40 }
+            spacing: 15
 
-            // ── Circular avatar ────────────────────────────────────────────
+            // ── Avatar ─────────────────────────────────────────────────────
+            // 120×120, same as Pixie loginCard avatar item
             Item {
-                Layout.preferredWidth:  110
-                Layout.preferredHeight: 110
+                Layout.preferredWidth:  120
+                Layout.preferredHeight: 120
                 Layout.alignment: Qt.AlignHCenter
 
-                // Fallback: circle with initial
+                // Fallback initial circle — color "#2D2F27" (Pixie avatarFallback)
                 Rectangle {
                     anchors.fill: parent
-                    color: "#2a2d24"
+                    color: "#2D2F27"
                     radius: width / 2
                     visible: avatarImage.status !== Image.Ready
 
@@ -169,13 +151,13 @@ Item {
                         anchors.centerIn: parent
                         text: mainBlock.userName.charAt(0).toUpperCase() || "?"
                         color: mainBlock.accent
-                        font.pixelSize: 44
+                        font.pixelSize: 48
                         font.family: mainBlock.pixieFont
                         font.weight: Font.Bold
                     }
                 }
 
-                // Circular avatar via Canvas (no border/outline)
+                // Circular avatar via Canvas clip (Pixie avatarCanvas method)
                 Canvas {
                     id: avatarCanvas
                     anchors.fill: parent
@@ -192,7 +174,7 @@ Item {
                     }
 
                     Timer {
-                        id: repaintTimer; interval: 300
+                        id: repaintTimer; interval: 500
                         onTriggered: avatarCanvas.requestPaint()
                     }
 
@@ -209,26 +191,24 @@ Item {
                 }
             }
 
-            // ── Name ───────────────────────────────────────────────────────
+            // ── Username ───────────────────────────────────────────────────
             Text {
                 Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: 10
                 text: mainBlock.userName
                       || i18ndc("plasma_shell_org.kde.plasma.desktop", "@label", "User")
                 color: "white"
-                font.pixelSize: 22
+                font.pixelSize: 24
                 font.weight: Font.Bold
                 font.family: mainBlock.pixieFont
             }
 
-            // ── Switch User pill — animations identical to Pixie's sessionPill ──
-            // Reference: Main.qml #sessionPill
-            //   color:        pressed||opened → “#3D3F37”  idle → “#2D2F27”
-            //   border.color: pressed||opened → accent     idle → “#3D3F37”
-            //   scale:        pressed → 0.95
-            //   Behavior on scale: NumberAnimation { duration: 100 }
+            // ── Switch User pill ───────────────────────────────────────────
+            // Mirrors Pixie sessionPill exactly:
+            //   width:180  height:36  radius:18  color idle:"#2D2F27"
+            //   border.color idle:"#3D3F37"  pressed → accent border + scale 0.95
             Item {
                 Layout.alignment: Qt.AlignHCenter
-                // Leave a margin on the side so the scale doesn't cut the edge
                 Layout.preferredWidth:  switchPill.width
                 Layout.preferredHeight: switchPill.height
                 visible: {
@@ -244,26 +224,20 @@ Item {
                 Rectangle {
                     id: switchPill
                     anchors.centerIn: parent
-                    width:  switchRow.implicitWidth + 48
-                    height: 36
-                    radius: 18
+                    width:  180; height: 36; radius: 18
 
-                    // Colors identical to sessionPill
                     color:        switchArea.containsPress ? "#3D3F37" : "#2D2F27"
                     border.width: 1
                     border.color: switchArea.containsPress ? mainBlock.accent : "#3D3F37"
-
-                    // Scale identical to sessionPill
                     scale: switchArea.containsPress ? 0.95 : 1.0
-                    Behavior on scale       { NumberAnimation  { duration: 100 } }
-                    Behavior on color       { ColorAnimation   { duration: 100 } }
+
+                    Behavior on scale        { NumberAnimation { duration: 100 } }
+                    Behavior on color        { ColorAnimation  { duration: 100 } }
                     Behavior on border.color { ColorAnimation  { duration: 100 } }
 
                     RowLayout {
-                        id: switchRow
                         anchors.centerIn: parent
                         spacing: 8
-                        // Icon with the same accent color as the “󰟀” in sessionPill
                         Text {
                             text: "󰯄"
                             color: mainBlock.accent
@@ -289,8 +263,7 @@ Item {
                             var p = mainBlock.parent;
                             while (p) {
                                 if (typeof p.sessionManagement !== "undefined") {
-                                    p.sessionManagement.switchUser();
-                                    return;
+                                    p.sessionManagement.switchUser(); return;
                                 }
                                 p = p.parent;
                             }
@@ -299,76 +272,50 @@ Item {
                 }
             }
 
-            // ── Pixie-style password field ────────────────────────────────
-            // We replaced PlasmaExtras.PasswordField with a custom TextField
-            // featuring the Pixie SDDM dark theme and accent border.
+            Item { Layout.fillHeight: true }
+
+            // ── Password field ─────────────────────────────────────────────
+            // Uses TextField (required by VirtualKeyboardLoader, not TextInput).
+            // Mirrors Pixie passwordField:
+            //   horizontalAlignment: center  font.pixelSize:18
+            //   background: #2D2F27  radius:16  border accent on focus
+            //   placeholder "Password" centered, color gray, opacity 0.5
             Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 46
+                Layout.preferredHeight: passwordField.implicitHeight
 
-                // Dark background with an accent border when in focus
-                Rectangle {
+                TextField {
+                    id: passwordField
                     anchors.fill: parent
-                    color: "#2D2F27"
-                    radius: 14
-                    border.width: passwordBox.activeFocus ? 2 : 1
-                    border.color: passwordBox.activeFocus
-                                  ? mainBlock.accent
-                                  : Qt.rgba(1, 1, 1, 0.12)
-                    Behavior on border.color { ColorAnimation { duration: 150 } }
-                    Behavior on border.width { NumberAnimation { duration: 100 } }
-                }
-
-                // Placeholder
-                Text {
-                    anchors { left: parent.left; verticalCenter: parent.verticalCenter; leftMargin: 16 }
-                    text: i18ndc("plasma_shell_org.kde.plasma.desktop",
-                                 "@info:placeholder in text field", "Password")
-                    color: Qt.rgba(1, 1, 1, 0.35)
-                    font.pixelSize: 15
+                    echoMode: TextInput.Password
+                    horizontalAlignment: Text.AlignHCenter
+                    font.pixelSize: 18
                     font.family: mainBlock.pixieFont
-                    visible: !passwordBox.text && !passwordBox.activeFocus
-                }
-
-                // Native TextField (visually invisible, only captures input)
-                TextInput {
-                    id: passwordBox
-                    anchors {
-                        left: parent.left; right: showPasswordBtn.left
-                        verticalCenter: parent.verticalCenter
-                        leftMargin: 16; rightMargin: 8
-                    }
-                    echoMode: mainBlock.showPassword
-                               ? TextInput.Normal
-                               : TextInput.Password
                     color: "white"
-                    font.pixelSize: 15
-                    font.family: mainBlock.pixieFont
                     focus: true
                     enabled: !authenticator.graceLocked
-                    // cursorVisible via activeFocus is automatic in TextInput
-                    selectionColor: Qt.rgba(mainBlock.accent.r,
-                                            mainBlock.accent.g,
-                                            mainBlock.accent.b, 0.4)
+                    placeholderText: ""   // replaced by custom Text below
 
-                    // PasswordSync
                     text: PasswordSync.password
+
+                    background: Rectangle {
+                        color: "#2D2F27"
+                        radius: 16
+                        border.width: passwordField.activeFocus ? 2 : 0
+                        border.color: mainBlock.accent
+                        Behavior on border.width { NumberAnimation { duration: 100 } }
+                    }
 
                     onAccepted: {
                         if (mainBlock.lockScreenUiVisible) mainBlock.startLogin();
                     }
 
-                    Keys.onPressed: event => {
-                        if (event.key === Qt.Key_Left && !text) { event.accepted = true; }
-                        if (event.key === Qt.Key_Right && !text) { event.accepted = true; }
-                    }
-
                     Connections {
                         target: root
                         function onClearPassword() {
-                            passwordBox.forceActiveFocus();
-                            passwordBox.text = "";
-                            passwordBox.text = Qt.binding(() => PasswordSync.password);
+                            passwordField.forceActiveFocus();
+                            passwordField.clear();
+                            passwordField.text = Qt.binding(() => PasswordSync.password);
                         }
                         function onNotificationRepeated() {
                             mainBlock.playHighlightAnimation();
@@ -376,59 +323,54 @@ Item {
                     }
                 }
 
-                Binding {
-                    target: PasswordSync
-                    property: "password"
-                    value: passwordBox.text
-                }
-
-                // Show/Hide Password button
+                // Centered placeholder — overlaid on the TextField
                 Text {
-                    id: showPasswordBtn
-                    anchors { right: parent.right; verticalCenter: parent.verticalCenter; rightMargin: 14 }
-                    text: mainBlock.showPassword ? "󰛐" : "󰛑"
-                    color: Qt.rgba(1, 1, 1, showPwArea.containsMouse ? 0.8 : 0.4)
-                    font.pixelSize: 18
-                    Behavior on color { ColorAnimation { duration: 100 } }
-
-                    MouseArea {
-                        id: showPwArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: mainBlock.showPassword = !mainBlock.showPassword
-                    }
+                    anchors.centerIn: parent
+                    text: i18ndc("plasma_shell_org.kde.plasma.desktop",
+                                 "@info:placeholder in text field", "Password")
+                    color: "gray"
+                    font.pixelSize: 16
+                    font.family: mainBlock.pixieFont
+                    horizontalAlignment: Text.AlignHCenter
+                    opacity: 0.5
+                    visible: !passwordField.text && !passwordField.activeFocus
+                    // Sits above the TextField but doesn't capture input
+                    enabled: false
                 }
             }
 
-            // ── Notification (Caps Lock / password error) ────────────────────
+            Binding {
+                target: PasswordSync
+                property: "password"
+                value: passwordField.text
+            }
+
+            // ── Notification (Caps Lock / wrong password) ──────────────────
             Text {
                 Layout.fillWidth: true
-                Layout.alignment: Qt.AlignHCenter
                 horizontalAlignment: Text.AlignHCenter
                 text: mainBlock.notificationMessage
                 color: mainBlock.accent
-                font.pixelSize: 13
+                font.pixelSize: 14
                 font.family: mainBlock.pixieFont
+                font.weight: Font.Medium
                 wrapMode: Text.WordWrap
                 visible: text !== ""
                 opacity: visible ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 200 } }
             }
 
-            // ── Fingerprint / smartcard ────────────────────────────────────
+            // ── Fingerprint / smartcard hints ──────────────────────────────
             component FailableLabel : Text {
                 id: _flab
-                required property int kind
+                required property int    kind
                 required property string label
                 visible: authenticator.authenticatorTypes & kind
                 text: label
                 horizontalAlignment: Text.AlignHCenter
                 Layout.fillWidth: true
                 font.pixelSize: 13
-                opacity: 0.6
-                color: "white"
-                wrapMode: Text.WordWrap
+                opacity: 0.6; color: "white"; wrapMode: Text.WordWrap
 
                 RejectPasswordAnimation { id: _rej; target: _flab; onFinished: _t.restart() }
                 Connections {
@@ -457,21 +399,25 @@ Item {
                               "@info:usagetip", "(or scan your smartcard)")
             }
 
-            // ── Round unlock button ──────────────────────────────────────
+            Item { Layout.fillHeight: true }
+
+            // ── Unlock button ──────────────────────────────────────────────
+            // Matches Pixie loginButton: width:64 height:64 radius:32
+            // color: accent (idle) → darker on press; arrow icon font.pixelSize:32
             Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 60
-                Layout.topMargin: 2
-                Layout.bottomMargin: 4
+                Layout.preferredHeight: 64
 
                 Rectangle {
                     id: loginButton
-                    width: 56; height: 56; radius: 28
+                    width: 64; height: 64; radius: 32
                     anchors.centerIn: parent
+
                     color: loginArea.containsPress
-                           ? Qt.darker(mainBlock.accent, 1.15)
+                           ? Qt.darker(mainBlock.accent, 1.1)
                            : mainBlock.accent
                     Behavior on color { ColorAnimation { duration: 120 } }
+
                     scale: loginArea.containsPress ? 0.93 : 1.0
                     Behavior on scale { NumberAnimation { duration: 100 } }
 
@@ -479,7 +425,9 @@ Item {
                         anchors.centerIn: parent
                         text: "→"
                         color: "white"
-                        font.pixelSize: 26
+                        font.pixelSize: 32
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment:   Text.AlignVCenter
                     }
 
                     MouseArea {
