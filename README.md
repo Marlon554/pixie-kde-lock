@@ -7,7 +7,7 @@ A clean, modern, and minimal kscreenlocker theme inspired by Google Pixel UI and
 </div>
 
 > [!CAUTION]
-> This project modifies critical components in `/usr/share/plasma`. I am not responsible for any broken systems. **USE AT YOUR OWN RISK**. When installing, please test using the command `/usr/lib/kscreenlocker_greet --testing`, `/usr/lib64/kscreenlocker_greet --testing` or `/usr/lib/x86_64-linux-gnu/libexec/kscreenlocker_greet --testing`, depending on your distribution.
+> This project modifies critical components in `/usr/share/plasma`. I am not responsible for any broken systems. **USE AT YOUR OWN RISK**. When installing (see Installation section), please test using the command `/usr/lib/kscreenlocker_greet --testing`, `/usr/lib64/kscreenlocker_greet --testing` or `/usr/lib/x86_64-linux-gnu/libexec/kscreenlocker_greet --testing`, depending on your distribution.
 
 ---
 
