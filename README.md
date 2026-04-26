@@ -1,13 +1,18 @@
 # ✨ Pixie KDE Lock
 
-A clean, modern, and minimal kscreenlocker theme inspired by Google Pixel UI and Material Design 3.
+A clean, modern, and minimal kscreenlocker theme inspired by Google Pixel UI and Material Design 3. Pixie KDE Lock is a fork of Pixie SDDM by [xCaptaiN09](https://github.com/xCaptaiN09). It incorporates components from the KDE Plasma Lockscreen. This project is licensed under the GPL-v2.0-or-later, while original Pixie SDDM components remain under the MIT License.
 <div align="center">
   <img src="screenshots/Lock Screen.png" width="45%" alt="Lock Screen" />
   <img src="screenshots/Login Card.png" width="45%" alt="Login Screen" />
 </div>
 
-> [!CAUTION]
-> This project modifies critical components in `/usr/share/plasma`. I am not responsible for any broken systems. **USE AT YOUR OWN RISK**. When installing (see Installation section), please test using the command `/usr/lib/kscreenlocker_greet --testing`, `/usr/lib64/kscreenlocker_greet --testing` or `/usr/lib/x86_64-linux-gnu/libexec/kscreenlocker_greet --testing`, depending on your distribution.
+>[!CAUTION]
+> **Warning:** This project modifies critical system files in `/usr/share/plasma`. Improper configuration can result in being locked out of your desktop session.
+>
+> After following the installations steps, do not log out, verify the QML logic with the greeter test tool:
+>- **Arch Linux:** `/usr/lib/kscreenlocker_greet --testing`
+>- **Fedora:** `/usr/lib64/kscreenlocker_greet --testing`
+>- **Debian/Ubuntu:** `/usr/lib/x86_64-linux-gnu/libexec/kscreenlocker_greet --testing`
 
 ---
 
@@ -20,23 +25,28 @@ A clean, modern, and minimal kscreenlocker theme inspired by Google Pixel UI and
 
 ## 📦 Installation
 
-**To install it:**
+**Follow the steps below to install:**
 ```bash
-git clone https://github.com/Marlon554/pixie-kde-lock.git pixie-kde-lock
+git clone https://github.com/Marlon554/pixie-kde-lock.git
 cd pixie-kde-lock
 chmod +x install.sh
 ./install.sh
 ```
-> [!NOTE]
-> During installation, the script automatically creates a backup of the original lockscreen folder at `/usr/share/plasma/shells/org.kde.plasma.desktop/contents/lockscreen.bak`. This ensures you can restore it if needed.
+---
+
+>[!NOTE]
+> During installation, the script automatically creates a backup of the original lock screen at:
+`/usr/share/plasma/shells/org.kde.plasma.desktop/contents/lockscreen.bak`
+>
+> This allows you to restore the original configuration if needed.
 
 ## 🎨 Customization
-Customization is handled by KDE Plasma. You can change the background by right-clicking on an image and setting it as your lock screen wallpaper (color extraction is currently unavailable).
+Customization is managed by KDE Plasma. To change the background, simply right-click an image and set it as your lock screen wallpaper. Color extraction is currently unavailable.
 
 ## 🤝 Credits
 
-- **Pixie KDE Lock Author:** [Marlon554](https://github.com/Marlon554)
-- **Pixie SDDM Author:** [xCaptaiN09](https://github.com/xCaptaiN09)
+- **[Pixie SDDM](https://github.com/xCaptaiN09/pixie-sddm) by xCaptaiN09:** original visual design, color palette, typography and animations. Licensed under MIT.
+- **[KDE Plasma Lockscreen](https://invent.kde.org/plasma/plasma-workspace):** base QML structure and Plasma integration components. Licensed under GPL-2.0-or-later.
 - **Design:** Inspired by Google Pixel and MD3.
 - **Font:** Google Sans Flex (included).
 
