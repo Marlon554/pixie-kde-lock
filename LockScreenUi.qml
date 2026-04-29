@@ -3,7 +3,7 @@
  * Visual design: Pixie SDDM by xCaptaiN09
  * Base: Plasma kscreenlocker (GPL-2.0-or-later)
  *
- * SPDX-License-Identifier: MIT OR GPL-2.0-or-later
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 import QtQuick
