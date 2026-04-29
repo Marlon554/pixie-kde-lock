@@ -7,7 +7,7 @@
  * avatar / username / actionItems that the parent component auto-generates.
  * Implements the minimum API expected by LockScreenUi and VirtualKeyboardLoader.
  *
- * SPDX-License-Identifier: MIT OR GPL-2.0-or-later
+ * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 import QtQuick
