@@ -1,6 +1,6 @@
 /*
  * Pixie Lockscreen — LockScreenUi
- * Visual design: Pixie SDDM by xCaptaiN09
+ * Visual design: Pixie SDDM by xCaptaiN09 (MIT)
  * Base: Plasma kscreenlocker (GPL-2.0-or-later)
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
