@@ -1,6 +1,6 @@
 /*
  * Pixie Lockscreen — MainBlock
- * Visual design: Pixie SDDM by xCaptaiN09
+ * Visual design: Pixie SDDM by xCaptaiN09 (Licensed under MIT)
  * Base: Plasma kscreenlocker
  *
  * Does NOT inherit SessionManagementScreen to avoid duplicate rendering of
