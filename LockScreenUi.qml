@@ -1,6 +1,8 @@
 /*
  * Pixie Lockscreen — LockScreenUi
- * Visual design: Pixie SDDM by xCaptaiN09 (MIT)
+ * Visual design adapted from Pixie SDDM by xCaptaiN09
+ * https://github.com/xCaptaiN09/pixie-sddm (MIT License)
+ *
  * Base: Plasma kscreenlocker (GPL-2.0-or-later)
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -25,10 +27,45 @@ import "components"
 Item {
     id: lockScreenUi
 
-    // Fixed accent color from Pixie's default wallpaper palette
-    readonly property color accent: "#A9C78F"
+    // ── Accent colors derived from Plasma's highlight color ────────────────
+    // The same updateColors() logic from Pixie's Clock.qml, applied to
+    // Kirigami.Theme.highlightColor instead of the extracted wallpaper color.
+    //
+    // accentHours   — vibrant tone (sat×1.3, val 0.95) + 15 % white tint.
+    //                 Used for: hours digits, date label, PowerBar icons.
+    // accentMinutes — soft/pastel tone (sat×0.75, val 0.92) + 40 % white tint.
+    //                 Used for: minutes digits only.
+    readonly property color _h: Kirigami.Theme.highlightColor
 
-    // Exposed for MainBlock lookups
+    readonly property color accentHours: {
+        var h = _h;
+        var v;
+        if (h.hsvValue < 0.3) {
+            v = Qt.hsva(h.hsvHue, 0.6, 0.90, 1.0);
+        } else if (h.hsvValue > 0.8 && h.hsvSaturation < 0.2) {
+            v = Qt.hsva(h.hsvHue, 0.80, 0.70, 1.0);
+        } else {
+            v = Qt.hsva(h.hsvHue, Math.min(1.0, h.hsvSaturation * 1.3), 0.95, 1.0);
+        }
+        return Qt.tint(v, Qt.rgba(1, 1, 1, 0.15));
+    }
+
+    readonly property color accentMinutes: {
+        var h = _h;
+        var v;
+        if (h.hsvValue < 0.3) {
+            v = Qt.hsva(h.hsvHue, 0.35, 0.85, 1.0);
+        } else if (h.hsvValue > 0.8 && h.hsvSaturation < 0.2) {
+            v = Qt.hsva(h.hsvHue, 0.50, 0.75, 1.0);
+        } else {
+            v = Qt.hsva(h.hsvHue, Math.min(1.0, h.hsvSaturation * 0.75), 0.92, 1.0);
+        }
+        return Qt.tint(v, Qt.rgba(1, 1, 1, 0.40));
+    }
+
+    // accentHours is used everywhere outside the clock (date, PowerBar, card)
+    readonly property color accent: accentHours
+
     property alias sessionManagement: sessionManagement
     property alias pixieFontMedium:   pixieFontMedium
     property alias pixieFontRegular:  pixieFontRegular
@@ -142,11 +179,8 @@ Item {
         Keys.onPressed: event => { uiVisible = true; event.accepted = false; }
 
         Timer {
-            id: fadeoutTimer
-            interval: 10000
-            onTriggered: {
-                if (!lockScreenRoot.blockUI) lockScreenRoot.uiVisible = false;
-            }
+            id: fadeoutTimer; interval: 10000
+            onTriggered: { if (!lockScreenRoot.blockUI) lockScreenRoot.uiVisible = false; }
         }
         Timer { id: notificationRemoveTimer; interval: 3000; onTriggered: root.notification = "" }
         Timer {
@@ -161,37 +195,25 @@ Item {
         Component.onCompleted: launchAnimation.start()
 
         // ── Wallpaper + blur ───────────────────────────────────────────────
-        // WallpaperFader expects clock and footer to have an opacity property.
-        // We pass stub Items so it doesn't crash with "non-existent property".
         WallpaperFader {
             anchors.fill: parent
             state: lockScreenRoot.uiVisible ? "on" : "off"
             source: wallpaper
             mainStack: mainStack
-            // Stub items with opacity so WallpaperFader's PropertyChanges work
             clock:  stubClock
             footer: stubFooter
             alwaysShowClock: false
         }
-
-        // Stub items passed to WallpaperFader for clock and footer.
-        // WallpaperFader animates their native opacity (QQuickItem.opacity)
-        // and clock.shadow.opacity via PropertyChanges — we must NOT redeclare
-        // opacity (it is FINAL in QQuickItem). Just provide a real Item for
-        // clock.shadow so the property path resolves without crashing.
+        // Stubs satisfy WallpaperFader's required properties without
+        // redeclaring the FINAL opacity property of QQuickItem.
         Item {
             id: stubClock
             visible: false; width: 0; height: 0
             property Item shadow: Item { visible: false; width: 0; height: 0 }
         }
-        Item {
-            id: stubFooter
-            visible: false; width: 0; height: 0
-        }
+        Item { id: stubFooter; visible: false; width: 0; height: 0 }
 
-        // Dark overlay — matches Pixie exactly:
-        //   idle  → opacity 0.4
-        //   login → opacity 0.6
+        // Dark overlay — idle: 0.4, login: 0.6 (Pixie Main.qml values)
         Rectangle {
             anchors.fill: parent
             color: "black"
@@ -200,20 +222,19 @@ Item {
             z: 1
         }
 
-        // ── Top bar — date (left) + PowerBar (right) ───────────────────────
-        // Always visible, z:10, position mirrors Pixie Main.qml exactly.
+        // ── Top bar ────────────────────────────────────────────────────────
         Item {
             id: topBar
             z: 10
             anchors { top: parent.top; left: parent.left; right: parent.right }
-            height: 60
+            height: 80
 
-            // Date label — topMargin:50, leftMargin:60 (Pixie values)
+            // Date — accentHours color, topMargin:50 leftMargin:60 (Pixie values)
             Text {
                 id: dateLabel
                 anchors { top: parent.top; left: parent.left; topMargin: 50; leftMargin: 60 }
                 text: Qt.formatDateTime(new Date(), "dddd, MMMM d")
-                color: lockScreenUi.accent
+                color: lockScreenUi.accentHours
                 font.pixelSize: 22
                 font.family: pixieFontMedium.name
                 opacity: 0.9
@@ -223,15 +244,13 @@ Item {
                 }
             }
 
-            // PowerBar — topMargin:30, rightMargin:40 (Pixie values)
+            // PowerBar — accentHours color, topMargin:30 rightMargin:40 spacing:20
             Row {
-                id: powerBar
                 anchors { top: parent.top; right: parent.right; topMargin: 30; rightMargin: 40 }
                 spacing: 20
                 height: 30
 
-                // Battery — BatteryControlModel from org.kde.plasma.private.battery
-                // exposes: hasInternalBatteries, pluggedIn, hasCumulative, percent
+                // Battery — hidden on desktops without a battery
                 Row {
                     spacing: 5
                     anchors.verticalCenter: parent.verticalCenter
@@ -241,7 +260,7 @@ Item {
 
                     Text {
                         text: batteryControl.percent + "%"
-                        color: lockScreenUi.accent
+                        color: lockScreenUi.accentHours
                         font.pixelSize: 14
                         font.family: pixieFontMedium.name
                         font.weight: Font.Medium
@@ -249,14 +268,14 @@ Item {
                     }
                     Text {
                         text: batteryControl.pluggedIn ? "󱐋" : "󰁹"
-                        color: lockScreenUi.accent
+                        color: lockScreenUi.accentHours
                         font.pixelSize: 18
                         font.family: pixieFontMedium.name
                         anchors.verticalCenter: parent.verticalCenter
                     }
                 }
 
-                // Keyboard layout switcher
+                // Keyboard layout
                 PW.KeyboardLayoutSwitcher {
                     id: keyboardLayoutSwitcher
                     anchors.verticalCenter: parent.verticalCenter
@@ -269,9 +288,8 @@ Item {
                         id: kbLayoutText
                         anchors.centerIn: parent
                         text: keyboardLayoutSwitcher.layoutNames.shortName
-                              || keyboardLayoutSwitcher.layoutNames.longName
-                              || "??"
-                        color: lockScreenUi.accent
+                              || keyboardLayoutSwitcher.layoutNames.longName || "??"
+                        color: lockScreenUi.accentHours
                         font.pixelSize: 14
                         font.family: pixieFontMedium.name
                         font.capitalization: Font.AllUppercase
@@ -286,7 +304,7 @@ Item {
                 // Virtual keyboard toggle
                 Text {
                     text: inputPanel.keyboardActive ? "󰌐" : "󰌌"
-                    color: lockScreenUi.accent
+                    color: lockScreenUi.accentHours
                     font.pixelSize: 20
                     font.family: pixieFontMedium.name
                     anchors.verticalCenter: parent.verticalCenter
@@ -301,19 +319,16 @@ Item {
                     }
                 }
 
-                // Suspend
+                // Suspend — 󰤄 (Pixie PowerBar icon)
                 Text {
                     text: "󰤄"
-                    color: lockScreenUi.accent
+                    color: lockScreenUi.accentHours
                     font.pixelSize: 20
                     font.family: pixieFontMedium.name
                     anchors.verticalCenter: parent.verticalCenter
-                    scale: suspendArea.containsPress ? 0.88 : 1.0
-                    Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutQuad } }
                     MouseArea {
                         id: suspendArea
                         anchors.fill: parent
-                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: root.suspendToRamSupported
                                    ? root.suspendToRam()
@@ -323,9 +338,8 @@ Item {
             }
         }
 
-        // ── Clock — centered, fades out when UI becomes visible ────────────
+        // ── Clock — centered, fades out when login UI appears ──────────────
         Item {
-            id: pixieClockContainer
             z: 5
             anchors.centerIn: parent
             width:  pixieClock.implicitWidth
@@ -336,8 +350,9 @@ Item {
             }
             PixieClock {
                 id: pixieClock
-                baseAccent: lockScreenUi.accent
-                fontFamily: pixieFontMedium.name
+                hoursColor:   lockScreenUi.accentHours
+                minutesColor: lockScreenUi.accentMinutes
+                fontFamily:   pixieFontMedium.name
             }
         }
 
@@ -354,6 +369,7 @@ Item {
                 lockScreenUiVisible: lockScreenRoot.uiVisible
                 enabled: !graceLockTimer.running
                 userListModel: users
+                capsLockOn: capsLockState.locked
 
                 StackView.onStatusChanged: {
                     if (StackView.status === StackView.Activating) {
@@ -363,15 +379,7 @@ Item {
                     }
                 }
 
-                notificationMessage: {
-                    const parts = [];
-                    if (capsLockState.locked)
-                        parts.push(i18ndc("plasma_shell_org.kde.plasma.desktop",
-                                          "@info:status", "Caps Lock is on"));
-                    if (root.notification)
-                        parts.push(root.notification);
-                    return parts.join(" • ");
-                }
+                notificationMessage: root.notification
 
                 onPasswordResult: password => authenticator.respond(password)
             }

@@ -18,10 +18,14 @@ A clean, modern, and minimal kscreenlocker theme inspired by Google Pixel UI and
 
 ## 🌟 Features
 
-- **Pixel Aesthetic:** Clean typography and unique two-tone stacked clock
-- **Material Design 3:** Dark card UI with smooth animations and press interactions
-- **Circular Avatar:** Canvas-based circular profile picture
-- **KDE Plasma Integration:** Native suspend, switch user, virtual keyboard and battery indicator
+- **Pixel Aesthetic:** Clean typography and unique two-tone stacked clock.
+- **Material Design 3:** Dark card UI with smooth animations and press interactions.
+- **Circular Avatar:** Canvas-based circular profile picture.
+- **KDE Plasma Integration:** Native suspend, switch user, virtual keyboard and battery indicator.
+- **Plasma Accent Integration**: Uses your system accent color (System Settings → Colors)
+  to drive the two-tone clock and all UI elements.
+- **Keyboard Navigation**: Tab cycles between the password field and unlock button;
+  Enter submits from either element.
 
 ## 📦 Installation
 
