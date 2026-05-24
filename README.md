@@ -45,7 +45,7 @@ chmod +x install.sh
 > This allows you to restore the original configuration if needed.
 
 ## 🎨 Customization
-Customization is managed by KDE Plasma. To change the background, simply right-click an image and set it as your lock screen wallpaper.
+Customization is managed by KDE Plasma. To change the background, simply right-click an image and set it as your lock screen wallpaper. To change the colors displayed on the lock screen, adjust the accent color in System Settings.
 
 ## 🤝 Credits
 
